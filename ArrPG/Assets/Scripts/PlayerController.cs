@@ -28,6 +28,7 @@ public class PlayerController : MonoBehaviourPun
     public Player photonPlayer;
     public SpriteRenderer sr;
     public Animator weaponAnim;
+    public HeaderInfo headerInfo;
 
     //local player
     public static PlayerController me;
@@ -41,6 +42,7 @@ public class PlayerController : MonoBehaviourPun
         GameManager.instance.players[id - 1] = this;
 
         //initialize the health bar
+        headerInfo.Initialize(player.NickName, maxHp);
 
         if (player.IsLocal)
             me = this;
@@ -80,13 +82,14 @@ public class PlayerController : MonoBehaviourPun
     {
         lastAttackTime = Time.time;
 
-        Vector3 dir = (Input.mousePosition - Camera.main.ScreenToWorldPoint(transform.position)).normalized;
+        Vector3 dir = (Input.mousePosition - Camera.main.WorldToScreenPoint(transform.position)).normalized;
 
         RaycastHit2D hit = Physics2D.Raycast(transform.position + dir, dir, attackRange);
 
         if(hit.collider != null && hit.collider.gameObject.CompareTag("Enemy"))
         {
-
+            Enemy enemy = hit.collider.GetComponent<Enemy>();
+            enemy.photonView.RPC("TakeDamage", RpcTarget.MasterClient, damage);
         }
 
         weaponAnim.SetTrigger("Attack");
@@ -98,19 +101,26 @@ public class PlayerController : MonoBehaviourPun
         curHp -= damage;
 
         //update the health bar
+        headerInfo.photonView.RPC("UpdateHealthBar", RpcTarget.All, curHp);
 
         if (curHp <= 0)
             Die();
         else
         {
-            StartCoroutine(DamageFlash());
+            photonView.RPC("FlashDamage", RpcTarget.All);
+        }
+    }
 
-            IEnumerator DamageFlash()
-            {
-                sr.color = Color.red;
-                yield return new WaitForSeconds(0.05f);
-                sr.color = Color.white;
-            }
+    [PunRPC]
+    void FlashDamage()
+    {
+        StartCoroutine(DamageFlash());
+
+        IEnumerator DamageFlash()
+        {
+            sr.color = Color.red;
+            yield return new WaitForSeconds(0.05f);
+            sr.color = Color.white;
         }
     }
 
@@ -134,6 +144,7 @@ public class PlayerController : MonoBehaviourPun
         rig.isKinematic = false;
 
         //update the health bar
+        headerInfo.photonView.RPC("UpdateHealthBar", RpcTarget.All, curHp);
 
     }
 
@@ -141,6 +152,7 @@ public class PlayerController : MonoBehaviourPun
     void Heal (int amountToHeal)
     {
         curHp = Mathf.Clamp(curHp + amountToHeal, 0, maxHp);
+        headerInfo.photonView.RPC("UpdateHealthBar", RpcTarget.All, curHp);
     }
 
     [PunRPC]
@@ -149,6 +161,7 @@ public class PlayerController : MonoBehaviourPun
         gold += goldToGive;
 
         // update the ui
+        GameUI.instance.UpdateGoldText(gold);
 
     }
 }
